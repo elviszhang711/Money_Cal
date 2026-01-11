@@ -1,0 +1,5 @@
+{
+  "name": "TWD Stock Settlement Calculator",
+  "description": "A specialized balance calculator for SinoPac and Capital securities, featuring multi-currency settlement tracking and loan limit integration.",
+  "requestFramePermissions": []
+}

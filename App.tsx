@@ -1,0 +1,311 @@
+import React, { useState, useMemo } from 'react';
+import { BankStateBase, SinoPacState, CapitalState } from './types';
+import MoneyInput from './components/MoneyInput';
+import SummaryCard from './components/SummaryCard';
+
+// Icons
+const TrashIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+);
+
+const initialSinoPac: SinoPacState = {
+  balance: 0,
+  t1: 0,
+  t2: 0,
+  subscription: 0,
+  loanLimit: 0,
+  loanAvailable: 0,
+  usdRate: 32.5,
+  usdT1: 0,
+  usdT2: 0,
+};
+
+const initialCapital: CapitalState = {
+  balance: 0,
+  t1: 0,
+  t2: 0,
+  subscription: 0,
+  loanLimit: 0,
+  loanAvailable: 0,
+};
+
+const App: React.FC = () => {
+  const [sinoPac, setSinoPac] = useState<SinoPacState>(initialSinoPac);
+  const [capital, setCapital] = useState<CapitalState>(initialCapital);
+
+  // Handlers for SinoPac
+  const updateSinoPac = (field: keyof SinoPacState, value: number) => {
+    setSinoPac(prev => ({ ...prev, [field]: value }));
+  };
+
+  // Handlers for Capital
+  const updateCapital = (field: keyof CapitalState, value: number) => {
+    setCapital(prev => ({ ...prev, [field]: value }));
+  };
+
+  const resetAll = () => {
+    if(window.confirm('確定要清空所有資料嗎？')) {
+      setSinoPac(initialSinoPac);
+      setCapital(initialCapital);
+    }
+  };
+
+  // --- Calculations ---
+
+  // SinoPac Calculations
+  const sinoPacUsdT1InTwd = Math.round(sinoPac.usdT1 * sinoPac.usdRate);
+  const sinoPacUsdT2InTwd = Math.round(sinoPac.usdT2 * sinoPac.usdRate);
+  
+  // Revised Formula: Balance + Subscription + T1 + T2 + LoanLimit + LoanAvailable + (USD parts)
+  const sinoPacProjected = useMemo(() => {
+    const twdPart = sinoPac.balance + sinoPac.subscription + sinoPac.t1 + sinoPac.t2 + sinoPac.loanLimit + sinoPac.loanAvailable;
+    const usdPart = sinoPacUsdT1InTwd + sinoPacUsdT2InTwd;
+    return twdPart + usdPart;
+  }, [sinoPac, sinoPacUsdT1InTwd, sinoPacUsdT2InTwd]);
+
+  // Capital Calculations: Balance + Subscription + T1 + T2 + LoanLimit + LoanAvailable
+  const capitalProjected = useMemo(() => {
+    return capital.balance + capital.subscription + capital.t1 + capital.t2 + capital.loanLimit + capital.loanAvailable;
+  }, [capital]);
+
+  // Grand Totals
+  const totalProjected = sinoPacProjected + capitalProjected;
+
+  return (
+    <div className="min-h-screen bg-gray-50 pb-12">
+      {/* Header */}
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold">
+              $
+            </div>
+            <h1 className="text-xl font-bold text-gray-900 tracking-tight">交割款計算機 (永豐 & 群益)</h1>
+          </div>
+          <button 
+            onClick={resetAll}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-md transition-colors"
+          >
+            <TrashIcon /> 清空重置
+          </button>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        {/* Global Summary */}
+        <section className="mb-8">
+          <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+             總資產概況
+          </h2>
+          <div className="grid grid-cols-1 gap-4">
+            <SummaryCard 
+              title="預估總可用餘額" 
+              amount={totalProjected} 
+              subtext="含交割、申購及借貸額度"
+              color={totalProjected >= 0 ? 'green' : 'red'}
+            />
+          </div>
+        </section>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          
+          {/* Bank 1: SinoPac */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+            <div className="bg-gradient-to-r from-red-600 to-red-700 px-6 py-4 flex justify-between items-center text-white">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-lg">永豐銀行 (SinoPac)</span>
+                <span className="text-xs bg-red-800 bg-opacity-50 px-2 py-0.5 rounded text-red-100">含美金交割</span>
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-red-100 opacity-80">預估可用</div>
+                <div className="font-bold text-xl">{new Intl.NumberFormat('zh-TW').format(sinoPacProjected)}</div>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-8">
+              {/* TWD Section */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 border-b border-gray-100 pb-2 mb-4">
+                  <span className="w-1.5 h-5 bg-red-600 rounded-full"></span>
+                  <h3 className="font-semibold text-gray-800">台幣項目 (TWD)</h3>
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <MoneyInput 
+                    label="即時餘額" 
+                    value={sinoPac.balance} 
+                    onChange={(v) => updateSinoPac('balance', v)} 
+                    placeholder="目前帳戶餘額"
+                  />
+                  <MoneyInput 
+                    label="已扣申購款" 
+                    value={sinoPac.subscription} 
+                    onChange={(v) => updateSinoPac('subscription', v)} 
+                    placeholder="輸入金額"
+                    note="加計至預估餘額"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <MoneyInput 
+                    label="T+1 交割款" 
+                    value={sinoPac.t1} 
+                    onChange={(v) => updateSinoPac('t1', v)} 
+                    note="負數 = 買進需付款 (綠)"
+                    useStockColor={true}
+                  />
+                  <MoneyInput 
+                    label="T+2 交割款" 
+                    value={sinoPac.t2} 
+                    onChange={(v) => updateSinoPac('t2', v)}
+                    note="正數 = 賣出會入帳 (紅)" 
+                    useStockColor={true}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-dashed border-gray-200">
+                  <MoneyInput 
+                    label="借貸可申請額度" 
+                    value={sinoPac.loanLimit} 
+                    onChange={(v) => updateSinoPac('loanLimit', v)} 
+                    note="會加計至預估可用餘額"
+                  />
+                  <MoneyInput 
+                    label="借貸可動用金額" 
+                    value={sinoPac.loanAvailable} 
+                    onChange={(v) => updateSinoPac('loanAvailable', v)} 
+                    note="會加計至預估可用餘額"
+                  />
+                </div>
+              </div>
+
+              {/* USD Section */}
+              <div className="space-y-4 bg-gray-50 p-4 rounded-xl border border-gray-100">
+                <div className="flex items-center justify-between border-b border-gray-200 pb-2 mb-4">
+                  <div className="flex items-center gap-2">
+                    <span className="w-1.5 h-5 bg-green-600 rounded-full"></span>
+                    <h3 className="font-semibold text-gray-800">美金項目 (USD)</h3>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-medium text-gray-500">即時匯率</label>
+                    <input 
+                      type="number" 
+                      step="0.01"
+                      value={sinoPac.usdRate} 
+                      onChange={(e) => updateSinoPac('usdRate', parseFloat(e.target.value) || 0)}
+                      className="w-20 text-right text-sm border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <MoneyInput 
+                      label="美金 T+1 交割" 
+                      value={sinoPac.usdT1} 
+                      onChange={(v) => updateSinoPac('usdT1', v)} 
+                      currency="USD"
+                      useStockColor={true}
+                    />
+                    <div className="text-right text-xs text-gray-500 mt-1">
+                       ≈ NT$ {new Intl.NumberFormat('zh-TW').format(sinoPacUsdT1InTwd)}
+                    </div>
+                  </div>
+                  <div>
+                    <MoneyInput 
+                      label="美金 T+2 交割" 
+                      value={sinoPac.usdT2} 
+                      onChange={(v) => updateSinoPac('usdT2', v)} 
+                      currency="USD"
+                      useStockColor={true}
+                    />
+                    <div className="text-right text-xs text-gray-500 mt-1">
+                       ≈ NT$ {new Intl.NumberFormat('zh-TW').format(sinoPacUsdT2InTwd)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Bank 2: Capital */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden h-fit">
+             <div className="bg-gradient-to-r from-orange-500 to-orange-600 px-6 py-4 flex justify-between items-center text-white">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-lg">群益證券 (Capital)</span>
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-orange-100 opacity-80">預估可用</div>
+                <div className="font-bold text-xl">{new Intl.NumberFormat('zh-TW').format(capitalProjected)}</div>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-4">
+               <div className="flex items-center gap-2 border-b border-gray-100 pb-2 mb-4">
+                  <span className="w-1.5 h-5 bg-orange-500 rounded-full"></span>
+                  <h3 className="font-semibold text-gray-800">台幣項目 (TWD)</h3>
+                </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <MoneyInput 
+                  label="即時餘額" 
+                  value={capital.balance} 
+                  onChange={(v) => updateCapital('balance', v)} 
+                  placeholder="目前帳戶餘額"
+                />
+                <MoneyInput 
+                  label="已扣申購款" 
+                  value={capital.subscription} 
+                  onChange={(v) => updateCapital('subscription', v)} 
+                  placeholder="輸入金額"
+                  note="加計至預估餘額"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <MoneyInput 
+                  label="T+1 交割款" 
+                  value={capital.t1} 
+                  onChange={(v) => updateCapital('t1', v)} 
+                  note="負數 = 買進需付款 (綠)"
+                  useStockColor={true}
+                />
+                <MoneyInput 
+                  label="T+2 交割款" 
+                  value={capital.t2} 
+                  onChange={(v) => updateCapital('t2', v)} 
+                  note="正數 = 賣出會入帳 (紅)"
+                  useStockColor={true}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-dashed border-gray-200">
+                <MoneyInput 
+                  label="借貸可申請額度" 
+                  value={capital.loanLimit} 
+                  onChange={(v) => updateCapital('loanLimit', v)} 
+                   note="會加計至預估可用餘額"
+                />
+                <MoneyInput 
+                  label="借貸可動用金額" 
+                  value={capital.loanAvailable} 
+                  onChange={(v) => updateCapital('loanAvailable', v)} 
+                  note="會加計至預估可用餘額"
+                />
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <div className="mt-12 text-center text-sm text-gray-400">
+          <p>計算邏輯：即時餘額 + 已扣申購款 + 交割款(T+1/T+2) + 借貸可申請額度 + 借貸可動用金額</p>
+          <p className="mt-1">永豐美金部分依手動輸入匯率即時換算為台幣並計入總額</p>
+        </div>
+      </main>
+    </div>
+  );
+};
+
+export default App;
