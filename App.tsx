@@ -2,6 +2,27 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { BankStateBase, SinoPacState, CapitalState } from './types';
 import MoneyInput from './components/MoneyInput';
 import SummaryCard from './components/SummaryCard';
+import { db } from './lib/firebase';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  // In a real app we might show a UI notification here
+}
 
 // Icons
 const TrashIcon = () => (
@@ -38,24 +59,53 @@ const App: React.FC = () => {
   const [capital, setCapital] = useState<CapitalState>(initialCapital);
   const [showSaved, setShowSaved] = useState(false);
   const [currentUser, setCurrentUser] = useState<'Elvis' | 'Hanna'>('Elvis');
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Load from localStorage whenever currentUser changes
+  // Load from Firestore whenever currentUser changes
   useEffect(() => {
-    const saved = localStorage.getItem(`settlement_calc_data_${currentUser}`);
-    if (saved) {
+    const fetchData = async () => {
+      setIsLoading(true);
+      const docPath = `settlements/${currentUser}`;
       try {
-        const { sinoPac: savedSinoPac, capital: savedCapital } = JSON.parse(saved);
-        setSinoPac(savedSinoPac || initialSinoPac);
-        setCapital(savedCapital || initialCapital);
+        const docRef = doc(db, 'settlements', currentUser);
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setSinoPac(data.sinoPac || initialSinoPac);
+          setCapital(data.capital || initialCapital);
+        } else {
+          // If no cloud data, try localStorage fallback or reset to initial
+          const saved = localStorage.getItem(`settlement_calc_data_${currentUser}`);
+          if (saved) {
+            const { sinoPac: savedSinoPac, capital: savedCapital } = JSON.parse(saved);
+            setSinoPac(savedSinoPac || initialSinoPac);
+            setCapital(savedCapital || initialCapital);
+          } else {
+            setSinoPac(initialSinoPac);
+            setCapital(initialCapital);
+          }
+        }
       } catch (e) {
-        console.error('Failed to parse saved data', e);
-        setSinoPac(initialSinoPac);
-        setCapital(initialCapital);
+        handleFirestoreError(e, OperationType.GET, docPath);
+        // Fallback to localStorage on error
+        const saved = localStorage.getItem(`settlement_calc_data_${currentUser}`);
+        if (saved) {
+          try {
+            const { sinoPac: savedSinoPac, capital: savedCapital } = JSON.parse(saved);
+            setSinoPac(savedSinoPac || initialSinoPac);
+            setCapital(savedCapital || initialCapital);
+          } catch (err) {
+            setSinoPac(initialSinoPac);
+            setCapital(initialCapital);
+          }
+        }
+      } finally {
+        setIsLoading(false);
       }
-    } else {
-      setSinoPac(initialSinoPac);
-      setCapital(initialCapital);
-    }
+    };
+
+    fetchData();
   }, [currentUser]);
 
   // Handlers for SinoPac
@@ -68,18 +118,47 @@ const App: React.FC = () => {
     setCapital(prev => ({ ...prev, [field]: value }));
   };
 
-  const resetAll = () => {
+  const resetAll = async () => {
     if(window.confirm(`確定要清空 ${currentUser} 的所有資料嗎？`)) {
       setSinoPac(initialSinoPac);
       setCapital(initialCapital);
       localStorage.removeItem(`settlement_calc_data_${currentUser}`);
+      
+      const docPath = `settlements/${currentUser}`;
+      try {
+        await setDoc(doc(db, 'settlements', currentUser), {
+          sinoPac: initialSinoPac,
+          capital: initialCapital,
+          updatedAt: serverTimestamp()
+        });
+      } catch (e) {
+        handleFirestoreError(e, OperationType.WRITE, docPath);
+      }
     }
   };
 
-  const saveData = () => {
-    localStorage.setItem(`settlement_calc_data_${currentUser}`, JSON.stringify({ sinoPac, capital }));
-    setShowSaved(true);
-    setTimeout(() => setShowSaved(false), 2000);
+  const saveData = async () => {
+    setIsLoading(true);
+    const docPath = `settlements/${currentUser}`;
+    try {
+      // Save to localStorage
+      localStorage.setItem(`settlement_calc_data_${currentUser}`, JSON.stringify({ sinoPac, capital }));
+      
+      // Save to Firestore
+      await setDoc(doc(db, 'settlements', currentUser), {
+        sinoPac,
+        capital,
+        updatedAt: serverTimestamp()
+      });
+      
+      setShowSaved(true);
+      setTimeout(() => setShowSaved(false), 2000);
+    } catch (e) {
+      handleFirestoreError(e, OperationType.WRITE, docPath);
+      alert('儲存至雲端失敗，請檢查網路連線。已儲存至本機。');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // --- Calculations ---
@@ -131,13 +210,22 @@ const App: React.FC = () => {
 
             <button 
               onClick={saveData}
+              disabled={isLoading}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
                 showSaved 
                 ? 'bg-green-600 text-white shadow-sm' 
-                : 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100'
+                : isLoading
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100'
               }`}
             >
-              <SaveIcon /> {showSaved ? '已儲存' : '儲存資料'}
+              {isLoading && !showSaved ? (
+                <svg className="animate-spin h-4 w-4 mr-1" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              ) : <SaveIcon />}
+              {showSaved ? '已儲存' : isLoading ? '儲存中...' : '儲存資料'}
             </button>
             <button 
               onClick={resetAll}

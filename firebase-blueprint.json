@@ -1,0 +1,30 @@
+{
+  "entities": {
+    "SettlementData": {
+      "title": "Settlement Data",
+      "description": "User settlement and balance data",
+      "type": "object",
+      "properties": {
+        "sinoPac": {
+          "type": "object",
+          "description": "SinoPac bank state"
+        },
+        "capital": {
+          "type": "object",
+          "description": "Capital (Shin Kong) bank state"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["sinoPac", "capital", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/settlements/{userId}": {
+      "schema": "SettlementData",
+      "description": "Stores settlement data for each user"
+    }
+  }
+}
