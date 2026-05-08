@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { BankStateBase, SinoPacState, CapitalState } from './types';
 import MoneyInput from './components/MoneyInput';
 import SummaryCard from './components/SummaryCard';
@@ -6,6 +6,10 @@ import SummaryCard from './components/SummaryCard';
 // Icons
 const TrashIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+);
+
+const SaveIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
 );
 
 const initialSinoPac: SinoPacState = {
@@ -32,6 +36,27 @@ const initialCapital: CapitalState = {
 const App: React.FC = () => {
   const [sinoPac, setSinoPac] = useState<SinoPacState>(initialSinoPac);
   const [capital, setCapital] = useState<CapitalState>(initialCapital);
+  const [showSaved, setShowSaved] = useState(false);
+  const [currentUser, setCurrentUser] = useState<'Elvis' | 'Hanna'>('Elvis');
+
+  // Load from localStorage whenever currentUser changes
+  useEffect(() => {
+    const saved = localStorage.getItem(`settlement_calc_data_${currentUser}`);
+    if (saved) {
+      try {
+        const { sinoPac: savedSinoPac, capital: savedCapital } = JSON.parse(saved);
+        setSinoPac(savedSinoPac || initialSinoPac);
+        setCapital(savedCapital || initialCapital);
+      } catch (e) {
+        console.error('Failed to parse saved data', e);
+        setSinoPac(initialSinoPac);
+        setCapital(initialCapital);
+      }
+    } else {
+      setSinoPac(initialSinoPac);
+      setCapital(initialCapital);
+    }
+  }, [currentUser]);
 
   // Handlers for SinoPac
   const updateSinoPac = (field: keyof SinoPacState, value: number) => {
@@ -44,10 +69,17 @@ const App: React.FC = () => {
   };
 
   const resetAll = () => {
-    if(window.confirm('確定要清空所有資料嗎？')) {
+    if(window.confirm(`確定要清空 ${currentUser} 的所有資料嗎？`)) {
       setSinoPac(initialSinoPac);
       setCapital(initialCapital);
+      localStorage.removeItem(`settlement_calc_data_${currentUser}`);
     }
+  };
+
+  const saveData = () => {
+    localStorage.setItem(`settlement_calc_data_${currentUser}`, JSON.stringify({ sinoPac, capital }));
+    setShowSaved(true);
+    setTimeout(() => setShowSaved(false), 2000);
   };
 
   // --- Calculations ---
@@ -80,14 +112,40 @@ const App: React.FC = () => {
             <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold">
               $
             </div>
-            <h1 className="text-xl font-bold text-gray-900 tracking-tight">交割款計算機 (永豐 & 群益)</h1>
+            <h1 className="text-xl font-bold text-gray-900 tracking-tight">交割款計算機 (永豐 & 新光)</h1>
           </div>
-          <button 
-            onClick={resetAll}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-md transition-colors"
-          >
-            <TrashIcon /> 清空重置
-          </button>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <select 
+                value={currentUser}
+                onChange={(e) => setCurrentUser(e.target.value as 'Elvis' | 'Hanna')}
+                className="block w-24 pl-3 pr-8 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 appearance-none cursor-pointer"
+              >
+                <option value="Elvis">Elvis</option>
+                <option value="Hanna">Hanna</option>
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+              </div>
+            </div>
+
+            <button 
+              onClick={saveData}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                showSaved 
+                ? 'bg-green-600 text-white shadow-sm' 
+                : 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100'
+              }`}
+            >
+              <SaveIcon /> {showSaved ? '已儲存' : '儲存資料'}
+            </button>
+            <button 
+              onClick={resetAll}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-md transition-colors"
+            >
+              <TrashIcon /> 清空重置
+            </button>
+          </div>
         </div>
       </header>
 
@@ -229,11 +287,11 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          {/* Bank 2: Capital */}
+          {/* Bank 2: Shin Kong */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden h-fit">
              <div className="bg-gradient-to-r from-orange-500 to-orange-600 px-6 py-4 flex justify-between items-center text-white">
               <div className="flex items-center gap-2">
-                <span className="font-bold text-lg">群益證券 (Capital)</span>
+                <span className="font-bold text-lg">新光證券 (Shin Kong)</span>
               </div>
               <div className="text-right">
                 <div className="text-xs text-orange-100 opacity-80">預估可用</div>
