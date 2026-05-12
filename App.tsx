@@ -40,9 +40,11 @@ const initialSinoPac: SinoPacState = {
   subscription: 0,
   loanLimit: 0,
   loanAvailable: 0,
+  stockValue: 0,
   usdRate: 32.5,
   usdT1: 0,
   usdT2: 0,
+  usdStockValue: 0,
 };
 
 const initialCapital: CapitalState = {
@@ -52,6 +54,7 @@ const initialCapital: CapitalState = {
   subscription: 0,
   loanLimit: 0,
   loanAvailable: 0,
+  stockValue: 0,
 };
 
 const App: React.FC = () => {
@@ -72,15 +75,15 @@ const App: React.FC = () => {
 
         if (docSnap.exists()) {
           const data = docSnap.data();
-          setSinoPac(data.sinoPac || initialSinoPac);
-          setCapital(data.capital || initialCapital);
+          setSinoPac({ ...initialSinoPac, ...(data.sinoPac || {}) });
+          setCapital({ ...initialCapital, ...(data.capital || {}) });
         } else {
           // If no cloud data, try localStorage fallback or reset to initial
           const saved = localStorage.getItem(`settlement_calc_data_${currentUser}`);
           if (saved) {
             const { sinoPac: savedSinoPac, capital: savedCapital } = JSON.parse(saved);
-            setSinoPac(savedSinoPac || initialSinoPac);
-            setCapital(savedCapital || initialCapital);
+            setSinoPac({ ...initialSinoPac, ...(savedSinoPac || {}) });
+            setCapital({ ...initialCapital, ...(savedCapital || {}) });
           } else {
             setSinoPac(initialSinoPac);
             setCapital(initialCapital);
@@ -93,8 +96,8 @@ const App: React.FC = () => {
         if (saved) {
           try {
             const { sinoPac: savedSinoPac, capital: savedCapital } = JSON.parse(saved);
-            setSinoPac(savedSinoPac || initialSinoPac);
-            setCapital(savedCapital || initialCapital);
+            setSinoPac({ ...initialSinoPac, ...(savedSinoPac || {}) });
+            setCapital({ ...initialCapital, ...(savedCapital || {}) });
           } catch (err) {
             setSinoPac(initialSinoPac);
             setCapital(initialCapital);
@@ -166,6 +169,7 @@ const App: React.FC = () => {
   // SinoPac Calculations
   const sinoPacUsdT1InTwd = Math.round(sinoPac.usdT1 * sinoPac.usdRate);
   const sinoPacUsdT2InTwd = Math.round(sinoPac.usdT2 * sinoPac.usdRate);
+  const sinoPacUsdStockInTwd = Math.round((sinoPac.usdStockValue || 0) * sinoPac.usdRate);
   
   // Revised Formula: Balance + Subscription + T1 + T2 + LoanLimit + LoanAvailable + (USD parts)
   const sinoPacProjected = useMemo(() => {
@@ -181,6 +185,10 @@ const App: React.FC = () => {
 
   // Grand Totals
   const totalProjected = sinoPacProjected + capitalProjected;
+  const totalStockValue = sinoPac.stockValue + capital.stockValue + sinoPacUsdStockInTwd;
+  const stockAllocationRatio = (totalProjected + totalStockValue) > 0 
+    ? (totalStockValue / (totalProjected + totalStockValue)) * 100 
+    : 0;
 
   return (
     <div className="min-h-screen bg-gray-50 pb-12">
@@ -244,12 +252,24 @@ const App: React.FC = () => {
           <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
              總資產概況
           </h2>
-          <div className="grid grid-cols-1 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <SummaryCard 
               title="預估總可用餘額" 
               amount={totalProjected} 
               subtext="含交割、申購及借貸額度"
               color={totalProjected >= 0 ? 'green' : 'red'}
+            />
+            <SummaryCard 
+              title="股票總市值" 
+              amount={totalStockValue} 
+              color="indigo"
+            />
+            <SummaryCard 
+              title="持股配置建議" 
+              amount={stockAllocationRatio} 
+              isPercentage={true}
+              subtext="(股票市值 / 總資產)"
+              color="blue"
             />
           </div>
         </section>
@@ -323,6 +343,12 @@ const App: React.FC = () => {
                     onChange={(v) => updateSinoPac('loanAvailable', v)} 
                     note="會加計至預估可用餘額"
                   />
+                  <MoneyInput 
+                    label="股票市值" 
+                    value={sinoPac.stockValue} 
+                    onChange={(v) => updateSinoPac('stockValue', v)} 
+                    placeholder="輸入股票市值"
+                  />
                 </div>
               </div>
 
@@ -338,7 +364,7 @@ const App: React.FC = () => {
                     <input 
                       type="number" 
                       step="0.01"
-                      value={sinoPac.usdRate} 
+                      value={sinoPac.usdRate ?? ''} 
                       onChange={(e) => updateSinoPac('usdRate', parseFloat(e.target.value) || 0)}
                       className="w-20 text-right text-sm border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                     />
@@ -368,6 +394,21 @@ const App: React.FC = () => {
                     />
                     <div className="text-right text-xs text-gray-500 mt-1">
                        ≈ NT$ {new Intl.NumberFormat('zh-TW').format(sinoPacUsdT2InTwd)}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <MoneyInput 
+                      label="美金 股票市值" 
+                      value={sinoPac.usdStockValue} 
+                      onChange={(v) => updateSinoPac('usdStockValue', v)} 
+                      currency="USD"
+                      placeholder="輸入美金市值"
+                    />
+                    <div className="text-right text-xs text-gray-500 mt-1">
+                       ≈ NT$ {new Intl.NumberFormat('zh-TW').format(sinoPacUsdStockInTwd)}
                     </div>
                   </div>
                 </div>
@@ -438,6 +479,12 @@ const App: React.FC = () => {
                   value={capital.loanAvailable} 
                   onChange={(v) => updateCapital('loanAvailable', v)} 
                   note="會加計至預估可用餘額"
+                />
+                <MoneyInput 
+                  label="股票市值" 
+                  value={capital.stockValue} 
+                  onChange={(v) => updateCapital('stockValue', v)} 
+                  placeholder="輸入股票市值"
                 />
               </div>
             </div>

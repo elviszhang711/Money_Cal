@@ -72,7 +72,7 @@ const MoneyInput: React.FC<MoneyInputProps> = ({
             ${textColorClass}
           `}
           placeholder={placeholder}
-          value={value === 0 ? '' : value}
+          value={value === 0 ? '' : (value ?? '')}
           onChange={handleChange}
           readOnly={readOnly}
         />

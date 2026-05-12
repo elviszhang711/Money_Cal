@@ -2,13 +2,17 @@ import React from 'react';
 
 interface SummaryCardProps {
   title: string;
-  amount: number;
+  amount: number | string;
   subtext?: string;
   color?: 'blue' | 'green' | 'red' | 'indigo';
+  isPercentage?: boolean;
 }
 
-const SummaryCard: React.FC<SummaryCardProps> = ({ title, amount, subtext, color = 'indigo' }) => {
-  const formatCurrency = (val: number) => {
+const SummaryCard: React.FC<SummaryCardProps> = ({ title, amount, subtext, color = 'indigo', isPercentage = false }) => {
+  const formatValue = (val: number | string) => {
+    if (typeof val === 'string') return val;
+    if (isPercentage) return `${val.toFixed(1)}%`;
+    
     return new Intl.NumberFormat('zh-TW', {
       style: 'currency',
       currency: 'TWD',
@@ -23,12 +27,14 @@ const SummaryCard: React.FC<SummaryCardProps> = ({ title, amount, subtext, color
     indigo: 'bg-indigo-50 border-indigo-200 text-indigo-700',
   };
 
+  const isPositive = typeof amount === 'number' ? amount >= 0 : true;
+
   return (
     <div className={`p-4 rounded-xl border ${colorClasses[color]} flex flex-col justify-between h-full`}>
       <h3 className="text-sm font-semibold opacity-80 uppercase tracking-wider">{title}</h3>
       <div className="mt-2">
-        <p className={`text-2xl font-bold ${amount < 0 ? 'text-red-600' : ''}`}>
-          {formatCurrency(amount)}
+        <p className={`text-2xl font-bold ${typeof amount === 'number' && amount < 0 ? 'text-red-600' : ''}`}>
+          {formatValue(amount)}
         </p>
         {subtext && <p className="text-xs opacity-70 mt-1">{subtext}</p>}
       </div>
