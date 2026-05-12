@@ -33,6 +33,10 @@ const SaveIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
 );
 
+const CheckIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+);
+
 const initialSinoPac: SinoPacState = {
   balance: 0,
   t1: 0,
@@ -60,6 +64,7 @@ const initialCapital: CapitalState = {
 const App: React.FC = () => {
   const [sinoPac, setSinoPac] = useState<SinoPacState>(initialSinoPac);
   const [capital, setCapital] = useState<CapitalState>(initialCapital);
+  const [resetKey, setResetKey] = useState(0);
   const [showSaved, setShowSaved] = useState(false);
   const [currentUser, setCurrentUser] = useState<'Elvis' | 'Hanna'>('Elvis');
   const [isLoading, setIsLoading] = useState(false);
@@ -122,20 +127,31 @@ const App: React.FC = () => {
   };
 
   const resetAll = async () => {
-    if(window.confirm(`確定要清空 ${currentUser} 的所有資料嗎？`)) {
-      setSinoPac(initialSinoPac);
-      setCapital(initialCapital);
-      localStorage.removeItem(`settlement_calc_data_${currentUser}`);
-      
-      const docPath = `settlements/${currentUser}`;
+    if (window.confirm(`確定要清空 ${currentUser} 的所有資料嗎？`)) {
+      setIsLoading(true);
       try {
+        const resetSinoPac = { ...initialSinoPac };
+        const resetCapital = { ...initialCapital };
+        
+        setSinoPac(resetSinoPac);
+        setCapital(resetCapital);
+        setResetKey(prev => prev + 1);
+        localStorage.removeItem(`settlement_calc_data_${currentUser}`);
+        
+        const docPath = `settlements/${currentUser}`;
         await setDoc(doc(db, 'settlements', currentUser), {
-          sinoPac: initialSinoPac,
-          capital: initialCapital,
+          sinoPac: resetSinoPac,
+          capital: resetCapital,
           updatedAt: serverTimestamp()
         });
+        
+        setShowSaved(true);
+        setTimeout(() => setShowSaved(false), 2000);
       } catch (e) {
-        handleFirestoreError(e, OperationType.WRITE, docPath);
+        handleFirestoreError(e, OperationType.WRITE, `settlements/${currentUser}`);
+        alert('重置雲端資料失敗，但本機已重置。');
+      } finally {
+        setIsLoading(false);
       }
     }
   };
@@ -199,7 +215,7 @@ const App: React.FC = () => {
             <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold">
               $
             </div>
-            <h1 className="text-xl font-bold text-gray-900 tracking-tight">交割款計算機 (永豐 & 新光)</h1>
+            <h1 className="text-xl font-bold text-gray-900 tracking-tight">方舟計算機</h1>
           </div>
           <div className="flex items-center gap-2">
             <div className="relative">
@@ -219,7 +235,8 @@ const App: React.FC = () => {
             <button 
               onClick={saveData}
               disabled={isLoading}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+              title={showSaved ? '已儲存' : isLoading ? '儲存中...' : '儲存資料'}
+              className={`flex items-center justify-center w-9 h-9 rounded-md transition-all ${
                 showSaved 
                 ? 'bg-green-600 text-white shadow-sm' 
                 : isLoading
@@ -228,24 +245,24 @@ const App: React.FC = () => {
               }`}
             >
               {isLoading && !showSaved ? (
-                <svg className="animate-spin h-4 w-4 mr-1" viewBox="0 0 24 24">
+                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-              ) : <SaveIcon />}
-              {showSaved ? '已儲存' : isLoading ? '儲存中...' : '儲存資料'}
+              ) : showSaved ? <CheckIcon /> : <SaveIcon />}
             </button>
             <button 
               onClick={resetAll}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-md transition-colors"
+              title="清空重置"
+              className="flex items-center justify-center w-9 h-9 text-red-600 bg-red-50 hover:bg-red-100 rounded-md transition-colors"
             >
-              <TrashIcon /> 清空重置
+              <TrashIcon />
             </button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main key={resetKey} className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         
         {/* Global Summary */}
         <section className="mb-8">
@@ -262,6 +279,7 @@ const App: React.FC = () => {
             <SummaryCard 
               title="股票總市值" 
               amount={totalStockValue} 
+              subtext="含台股+美股"
               color="indigo"
             />
             <SummaryCard 

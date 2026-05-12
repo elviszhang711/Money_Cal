@@ -1,5 +1,5 @@
 {
-  "name": "TWD Stock Settlement Calculator",
+  "name": "方舟計算機",
   "description": "A specialized balance calculator for SinoPac and Shin Kong securities, featuring multi-currency settlement tracking and loan limit integration.",
   "requestFramePermissions": [],
   "majorCapabilities": []
